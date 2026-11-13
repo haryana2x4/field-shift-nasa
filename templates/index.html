@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Field Shift: NASA Spatial Farm Simulator & Orien AI</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=VT323&display=swap');
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #06040c;
+            color: #f1f5f9;
+            overflow-x: hidden;
+            perspective: 1200px;
+        }
+
+        .pixel-font { font-family: 'VT323', monospace; }
+
+        /* Spatial Glassmorphism */
+        .spatial-glass {
+            background: rgba(18, 14, 28, 0.78);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(192, 132, 252, 0.25);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+        }
+
+        .spatial-card {
+            background: rgba(22, 16, 38, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(168, 85, 247, 0.22);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .spatial-card:hover {
+            transform: translateY(-5px) scale(1.012);
+            border-color: rgba(217, 70, 239, 0.55);
+            box-shadow: 0 20px 48px rgba(168, 85, 247, 0.25);
+        }
+
+        .ender-glow {
+            text-shadow: 0 0 14px #d946ef, 0 0 28px #a855f7;
+        }
+
+        .ender-eye {
+            box-shadow: 0 0 18px #d946ef, 0 0 35px #a855f7, inset 0 0 8px #ffffff;
+            transition: transform 0.08s ease-out;
+        }
+
+        /* Scanning Laser */
+        @keyframes scanBeam {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 0.9; }
+            100% { transform: translateY(1200%); opacity: 0; }
+        }
+
+        .scanning-laser {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #22d3ee, #d946ef, transparent);
+            box-shadow: 0 0 20px #22d3ee;
+            animation: scanBeam 2.5s infinite linear;
+        }
+
+        /* Enderman Floating Idle Breathing */
+        @keyframes floatIdle {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .float-idle { animation: floatIdle 3.5s ease-in-out infinite; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0c0818; }
+        ::-webkit-scrollbar-thumb { background: #6b21a8; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen relative flex flex-col justify-between selection:bg-fuchsia-600 selection:text-white">
+
+    <!-- Web Audio Synthesizer -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(560, now);
+                    osc.frequency.exponentialRampToValueAtTime(840, now + 0.07);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.07);
+                    osc.start(now); osc.stop(now + 0.07);
+                } else if (type === 'teleport') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(130, now);
+                    osc.frequency.exponentialRampToValueAtTime(950, now + 0.35);
+                    osc.frequency.exponentialRampToValueAtTime(70, now + 0.7);
+                    gain.gain.setValueAtTime(0.28, now);
+                    gain.gain.linearRampToValueAtTime(0.001, now + 0.75);
+                    osc.start(now); osc.stop(now + 0.75);
+                } else if (type === 'shift') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(554.37, now + 0.1);
+                    osc.frequency.setValueAtTime(659.25, now + 0.2);
+                    osc.frequency.setValueAtTime(880, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.45);
+                    osc.start(now); osc.stop(now + 0.45);
+                } else if (type === 'orien') {
+                    // Soft Enderman chirping / vwoop
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(720, now + 0.12);
+                    osc.frequency.exponentialRampToValueAtTime(420, now + 0.25);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.28);
+                    osc.start(now); osc.stop(now + 0.28);
+                }
+            } catch(e) {}
+        }
+    </script>
+
+    <!-- Canvas Particle Background -->
+    <canvas id="enderCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+
+    <!-- ========================================== -->
+    <!-- 1. ENDERMAN SPATIAL LOGIN PORTAL           -->
+    <!-- ========================================== -->
+    <div id="loginPortal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-[#05040a]/92 backdrop-blur-xl"></div>
+
+        <div class="relative w-full max-w-md spatial-glass rounded-3xl p-8 border border-fuchsia-500/35 text-center shadow-2xl">
+            
+            <!-- Enderman Animated Face -->
+            <div class="my-2 flex flex-col items-center">
+                <div class="w-32 h-24 bg-[#090514] rounded-xl border border-purple-900/70 flex items-center justify-center relative p-3 shadow-inner">
+                    <div class="w-9 h-3 bg-[#150928] rounded-sm mx-1 flex items-center justify-center overflow-hidden">
+                        <div id="eyeLeft" class="w-5 h-2.5 bg-fuchsia-400 rounded-sm ender-eye"></div>
+                    </div>
+                    <div class="w-9 h-3 bg-[#150928] rounded-sm mx-1 flex items-center justify-center overflow-hidden">
+                        <div id="eyeRight" class="w-5 h-2.5 bg-fuchsia-400 rounded-sm ender-eye"></div>
+                    </div>
+                </div>
+                <div class="pixel-font text-3xl tracking-widest text-fuchsia-400 ender-glow mt-3 font-bold">
+                    THE ENDER GATE
+                </div>
+                <p class="text-xs text-purple-300/80 uppercase tracking-widest mt-0.5">NASA Field Shift • Biometric Farm Terminal</p>
+            </div>
+
+            <!-- Login Controls -->
+            <div class="space-y-4 text-left mt-6">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-purple-300 mb-1">
+                        <i class="fa-solid fa-user-astronaut text-fuchsia-400 mr-1"></i> Farmer Call-Sign / Name
+                    </label>
+                    <input type="text" id="farmerName" value="Farmer Rocky" 
+                        class="w-full bg-[#0e091b] border border-purple-500/40 rounded-xl px-4 py-2.5 text-sm text-purple-100 focus:outline-none focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400 font-medium">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-purple-300 mb-1">
+                        <i class="fa-solid fa-earth-americas text-cyan-400 mr-1"></i> Farm Ecosystem Biome
+                    </label>
+                    <select id="biomeSelect" onchange="onBiomeSelect(this.value)"
+                        class="w-full bg-[#0e091b] border border-purple-500/40 rounded-xl px-3 py-2.5 text-xs text-purple-100 focus:outline-none focus:border-fuchsia-400">
+                        {% for p in presets %}
+                        <option value="{{ p.id }}" data-lat="{{ p.lat }}" data-lon="{{ p.lon }}" data-name="{{ p.name }}" data-threat="{{ p.region_desc }}">
+                            {{ p.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs text-purple-300/80">
+                    <div>Latitude: <span id="loginLat" class="font-mono text-purple-100">30.9010</span>°N</div>
+                    <div>Longitude: <span id="loginLon" class="font-mono text-purple-100">75.8573</span>°E</div>
+                </div>
+
+                <!-- Warp Button -->
+                <button onclick="teleportToFarm()" 
+                    class="w-full py-3.5 px-4 rounded-xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white shadow-lg shadow-fuchsia-600/35 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 group mt-2">
+                    <i class="fa-solid fa-atom group-hover:rotate-180 transition-transform duration-500 text-fuchsia-300"></i>
+                    <span>Teleport into Spatial Farm</span>
+                </button>
+            </div>
+
+            <p class="text-[11px] text-purple-400/60 mt-5">
+                <i class="fa-solid fa-satellite text-cyan-400 mr-1"></i>
+                Synchronized with NASA POWER & MERRA-2 Earth Observation Satellite Constellation.
+            </p>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. SPATIAL FARM SIMULATOR HUD               -->
+    <!-- ========================================== -->
+    <div id="farmHUD" class="relative z-10 hidden flex-1 flex flex-col">
+        
+        <!-- Spatial Header -->
+        <header class="spatial-glass border-b border-purple-500/20 sticky top-0 z-40 px-4 sm:px-8 py-3.5">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                <!-- Title & Badge -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-900/60 border border-fuchsia-400/40 flex items-center justify-center text-fuchsia-400 shadow-lg shadow-fuchsia-900/50">
+                        <i class="fa-solid fa-gamepad text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800">
+                                Spatial Virtual Game
+                            </span>
+                            <span id="playerBadge" class="text-xs font-semibold text-emerald-400">
+                                Farmer Rocky • Adaptive Agro-Guardian
+                            </span>
+                        </div>
+                        <h1 class="text-lg font-black text-white tracking-wide">
+                            FIELD SHIFT: <span class="text-cyan-400 font-extrabold">NASA ADAPTIVE FARM</span>
+                        </h1>
+                    </div>
+                </div>
+
+                <!-- Gamification Counters -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="bg-[#120e24] border border-purple-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-trophy text-amber-400 text-sm"></i>
+                        <div class="text-left">
+                            <div class="text-[9px] uppercase tracking-wider text-purple-300">Resilience XP</div>
+                            <div id="xpCounter" class="text-sm font-black text-amber-300">120 XP</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#120e24] border border-cyan-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-droplet text-cyan-400 text-sm"></i>
+                        <div class="text-left">
+                            <div class="text-[9px] uppercase tracking-wider text-cyan-300">Water Saved</div>
+                            <div id="waterCounter" class="text-sm font-black text-cyan-200">2,400 L</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#120e24] border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-seedling text-emerald-400 text-sm"></i>
+                        <div class="text-left">
+                            <div class="text-[9px] uppercase tracking-wider text-emerald-300">Soil Vitality</div>
+                            <div id="soilVitality" class="text-sm font-black text-emerald-300">84%</div>
+                        </div>
+                    </div>
+
+                    <button onclick="toggleAudio()" id="audioBtn" 
+                        class="w-8 h-8 rounded-lg bg-[#18122b] border border-purple-500/40 text-purple-300 hover:text-white flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+                    <button onclick="returnToGate()" title="Return to Ender Gate" 
+                        class="w-8 h-8 rounded-lg bg-[#18122b] border border-fuchsia-500/40 text-fuchsia-400 hover:text-white flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-door-open"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Spatial Dashboard -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8 flex-1 w-full">
+
+            <!-- Mission Banner -->
+            <div class="spatial-card rounded-2xl p-6 border-l-4 border-l-cyan-400 relative overflow-hidden">
+                <div id="scanLaser" class="hidden scanning-laser"></div>
+                
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="text-xs uppercase font-bold tracking-widest text-cyan-300">NASA Satellite Sensor Beacon</span>
+                            <span class="text-xs text-purple-300/80">• Multi-Parameter Agroclimatology</span>
+                        </div>
+                        <h2 class="text-xl font-black text-white" id="missionTitle">
+                            Punjab Green Valley: Summer Adaptive Cycle
+                        </h2>
+                        <p class="text-xs text-slate-300 max-w-2xl" id="missionDesc">
+                            NASA Earth observation satellites detect high evaporative demand and groundwater pressure. Tap <strong>"Shift Crop"</strong> on stressed plots to boost soil health and earn Resilience XP!
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button onclick="scanWithNASA()" id="scanBtn"
+                            class="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/35 flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95">
+                            <i class="fa-solid fa-satellite-dish animate-bounce"></i>
+                            <span>Scan Field with NASA Satellites</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Deep NASA Telemetry Grid (6 Metrics) -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 pt-5 border-t border-purple-500/20 text-xs">
+                    
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Avg Temperature</div>
+                        <div id="hudTemp" class="font-extrabold text-slate-100 text-sm mt-0.5">31.4 °C</div>
+                        <div id="hudPeakTemp" class="text-[10px] text-amber-400 font-mono mt-0.5">Peak: 41.2 °C</div>
+                    </div>
+
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Precipitation</div>
+                        <div id="hudRain" class="font-extrabold text-blue-300 text-sm mt-0.5">48.2 mm</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">Total observed</div>
+                    </div>
+
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Root Soil Wetness</div>
+                        <div id="hudSoilRoot" class="font-extrabold text-emerald-400 text-sm mt-0.5">29.4 %</div>
+                        <div id="hudSoilTop" class="text-[10px] text-cyan-400 font-mono mt-0.5">Top: 24.1 %</div>
+                    </div>
+
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Vapor Deficit (VPD)</div>
+                        <div id="hudVPD" class="font-extrabold text-fuchsia-300 text-sm mt-0.5">2.1 kPa</div>
+                        <div class="text-[10px] text-rose-400 font-semibold mt-0.5">High Transpiration</div>
+                    </div>
+
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Solar Insolation</div>
+                        <div id="hudSolar" class="font-extrabold text-yellow-300 text-sm mt-0.5">22.8 MJ/m²</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">Photosynthetic flux</div>
+                    </div>
+
+                    <div class="bg-[#100c22]/80 p-3 rounded-xl border border-purple-500/20">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Wind & Dew Point</div>
+                        <div id="hudWindDew" class="font-extrabold text-slate-100 text-sm mt-0.5">2.8 m/s</div>
+                        <div id="hudDew" class="text-[10px] text-indigo-300 font-mono mt-0.5">Dew: 18.2 °C</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 3. THE VIRTUAL 3D FARM GRID                -->
+            <!-- ========================================== -->
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-black text-white flex items-center gap-2">
+                            <i class="fa-solid fa-cubes-stacked text-fuchsia-400"></i>
+                            Your 3D Farm Plots (Virtual Spatial Grid)
+                        </h3>
+                        <p class="text-xs text-slate-400">Tap <strong>"Shift Crop"</strong> on any plot to counter NASA's detected climate stresses!</p>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-1 rounded bg-purple-950 text-purple-300 border border-purple-800">
+                        3 Field Plots Active
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="farmPlotsContainer">
+                    
+                    <!-- Plot 1 -->
+                    <div class="spatial-card rounded-2xl p-6 relative border-t-2 border-t-amber-400" id="plotCard-1">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                                Plot 01 • Main Field
+                            </span>
+                            <span id="plotStatus-1" class="text-xs font-bold text-amber-400 flex items-center gap-1">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Thirsty (Low Moisture)
+                            </span>
+                        </div>
+
+                        <div class="py-6 flex flex-col items-center justify-center text-center">
+                            <div id="plotIconBox-1" class="w-20 h-20 rounded-2xl bg-gradient-to-b from-amber-900/40 to-[#140f28] border border-amber-500/40 flex items-center justify-center text-3xl shadow-lg shadow-amber-900/30 transform hover:scale-110 transition-transform">
+                                🌾
+                            </div>
+                            <h4 id="plotCropName-1" class="text-lg font-black text-white mt-3">High-Water Rice</h4>
+                            <p id="plotCropType-1" class="text-xs text-slate-400">Conventional Monoculture</p>
+                        </div>
+
+                        <div class="space-y-1.5 my-3">
+                            <div class="flex justify-between text-[11px] font-semibold">
+                                <span class="text-slate-400">Soil Moisture Level</span>
+                                <span id="plotMoistureVal-1" class="text-amber-400 font-mono">28% (Critical)</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                                <div id="plotMoistureBar-1" class="h-full bg-gradient-to-r from-red-500 to-amber-500 rounded-full transition-all duration-700" style="width: 28%;"></div>
+                            </div>
+                        </div>
+
+                        <button onclick="openShiftCropModal(1)" 
+                            class="w-full mt-2 py-2.5 px-3 rounded-xl font-bold text-xs uppercase tracking-wider bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white shadow-md shadow-fuchsia-700/30 transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shuffle"></i>
+                            <span>Shift Crop (Adapt)</span>
+                        </button>
+                    </div>
+
+                    <!-- Plot 2 -->
+                    <div class="spatial-card rounded-2xl p-6 relative border-t-2 border-t-emerald-400" id="plotCard-2">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                                Plot 02 • Central Meadow
+                            </span>
+                            <span id="plotStatus-2" class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check"></i> Thriving & Healthy
+                            </span>
+                        </div>
+
+                        <div class="py-6 flex flex-col items-center justify-center text-center">
+                            <div id="plotIconBox-2" class="w-20 h-20 rounded-2xl bg-gradient-to-b from-emerald-900/40 to-[#140f28] border border-emerald-500/40 flex items-center justify-center text-3xl shadow-lg shadow-emerald-900/30 transform hover:scale-110 transition-transform">
+                                🫘
+                            </div>
+                            <h4 id="plotCropName-2" class="text-lg font-black text-white mt-3">Moong Bean / Cowpea</h4>
+                            <p id="plotCropType-2" class="text-xs text-emerald-300">Nitrogen-Fixing Legume</p>
+                        </div>
+
+                        <div class="space-y-1.5 my-3">
+                            <div class="flex justify-between text-[11px] font-semibold">
+                                <span class="text-slate-400">Soil Moisture Level</span>
+                                <span id="plotMoistureVal-2" class="text-emerald-400 font-mono">62% (Optimal)</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                                <div id="plotMoistureBar-2" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700" style="width: 62%;"></div>
+                            </div>
+                        </div>
+
+                        <button onclick="openShiftCropModal(2)" 
+                            class="w-full mt-2 py-2.5 px-3 rounded-xl font-bold text-xs uppercase tracking-wider bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white shadow-md shadow-fuchsia-700/30 transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shuffle"></i>
+                            <span>Shift Crop (Adapt)</span>
+                        </button>
+                    </div>
+
+                    <!-- Plot 3 -->
+                    <div class="spatial-card rounded-2xl p-6 relative border-t-2 border-t-cyan-400" id="plotCard-3">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
+                                Plot 03 • Soil Armor Zone
+                            </span>
+                            <span id="plotStatus-3" class="text-xs font-bold text-cyan-300 flex items-center gap-1">
+                                <i class="fa-solid fa-shield"></i> Erosion Shielded
+                            </span>
+                        </div>
+
+                        <div class="py-6 flex flex-col items-center justify-center text-center">
+                            <div id="plotIconBox-3" class="w-20 h-20 rounded-2xl bg-gradient-to-b from-cyan-900/40 to-[#140f28] border border-cyan-500/40 flex items-center justify-center text-3xl shadow-lg shadow-cyan-900/30 transform hover:scale-110 transition-transform">
+                                🌿
+                            </div>
+                            <h4 id="plotCropName-3" class="text-lg font-black text-white mt-3">Sunn Hemp & Clover</h4>
+                            <p id="plotCropType-3" class="text-xs text-cyan-300">Biomass Cover Armor</p>
+                        </div>
+
+                        <div class="space-y-1.5 my-3">
+                            <div class="flex justify-between text-[11px] font-semibold">
+                                <span class="text-slate-400">Soil Moisture Level</span>
+                                <span id="plotMoistureVal-3" class="text-cyan-400 font-mono">54% (Protected)</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                                <div id="plotMoistureBar-3" class="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full transition-all duration-700" style="width: 54%;"></div>
+                            </div>
+                        </div>
+
+                        <button onclick="openShiftCropModal(3)" 
+                            class="w-full mt-2 py-2.5 px-3 rounded-xl font-bold text-xs uppercase tracking-wider bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white shadow-md shadow-fuchsia-700/30 transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shuffle"></i>
+                            <span>Shift Crop (Adapt)</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 4. SPATIAL NASA TELEMETRY CHARTS           -->
+            <!-- ========================================== -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="spatial-card rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-xs font-black uppercase tracking-wider text-fuchsia-300 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line"></i> NASA Daily Temperature Extreme Profile (°C)
+                        </h4>
+                        <span class="text-[10px] text-slate-400 font-mono">POWER / MERRA-2</span>
+                    </div>
+                    <div class="h-60">
+                        <canvas id="spatialTempChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="spatial-card rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-xs font-black uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-simple"></i> Rainfall (mm) vs Root Soil Moisture (%)
+                        </h4>
+                        <span class="text-[10px] text-slate-400 font-mono">NASA GEOS Wetness</span>
+                    </div>
+                    <div class="h-60">
+                        <canvas id="spatialPrecipChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NASA Raw Telemetry Table & CSV Download Bar -->
+            <div class="spatial-card rounded-2xl overflow-hidden">
+                <div class="p-4 bg-[#140f28] border-b border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h4 class="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table text-cyan-400"></i> Structured NASA Agroclimatology Feed
+                        </h4>
+                        <p class="text-[11px] text-slate-400">Verified satellite readings for judges and agricultural researchers</p>
+                    </div>
+                    <a id="downloadCsvLink" href="#" 
+                        class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-2 transition-all">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download Verified NASA CSV</span>
+                    </a>
+                </div>
+                <div class="overflow-x-auto max-h-64">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-[#0f0b1e] text-purple-300 font-bold uppercase tracking-wider sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2.5">Date</th>
+                                <th class="px-3 py-2.5">Temp (°C)</th>
+                                <th class="px-3 py-2.5">Max Temp</th>
+                                <th class="px-3 py-2.5">Rain (mm)</th>
+                                <th class="px-3 py-2.5">Root Soil</th>
+                                <th class="px-3 py-2.5">Top Soil</th>
+                                <th class="px-3 py-2.5">Solar (MJ/m²)</th>
+                                <th class="px-3 py-2.5">VPD (kPa)</th>
+                                <th class="px-3 py-2.5">GDD</th>
+                            </tr>
+                        </thead>
+                        <tbody id="telemetryTableBody" class="divide-y divide-purple-900/30 text-slate-300 font-mono">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+
+        <footer class="spatial-glass border-t border-purple-500/20 py-4 text-center text-xs text-purple-300/60 mt-12">
+            Built for the NASA Space Apps Challenge • <strong>Field Shift: Adapting Farms with NASA Data</strong>
+        </footer>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 5. SHIFT CROP SEED DECK MODAL              -->
+    <!-- ========================================== -->
+    <div id="shiftCropModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="spatial-glass w-full max-w-xl rounded-3xl p-6 border border-fuchsia-500/40 relative">
+            
+            <div class="flex items-center justify-between pb-4 border-b border-purple-500/30">
+                <div>
+                    <span class="text-[10px] font-bold uppercase text-fuchsia-400 tracking-wider">Field Shift Seed Deck</span>
+                    <h3 class="text-xl font-black text-white" id="modalPlotTitle">Choose Resilient Seed for Plot</h3>
+                </div>
+                <button onclick="closeShiftCropModal()" class="w-8 h-8 rounded-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-purple-200/80 my-4">
+                Selecting climate-adaptive crops protects your field from high evaporation and boosts your <strong>Resilience XP</strong>!
+            </p>
+
+            <div class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <div onclick="selectCrop('Pearl Millet', '🌾', 'Drought-Resilient Grain', 42, 60, 1400)"
+                    class="p-4 rounded-xl bg-[#140e26] border border-purple-500/30 hover:border-fuchsia-400 hover:bg-fuchsia-950/40 cursor-pointer transition-all flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">🌾</div>
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-fuchsia-300">Pearl Millet (Bajra)</div>
+                            <div class="text-[11px] text-slate-400">Thrives up to 44°C. Cuts water usage by 40%.</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-black text-amber-400">+60 XP</span>
+                        <div class="text-[10px] text-cyan-300">+1,400 L saved</div>
+                    </div>
+                </div>
+
+                <div onclick="selectCrop('Grain Sorghum', '🌽', 'Deep Root Hardiness', 38, 50, 1100)"
+                    class="p-4 rounded-xl bg-[#140e26] border border-purple-500/30 hover:border-fuchsia-400 hover:bg-fuchsia-950/40 cursor-pointer transition-all flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">🌽</div>
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-fuchsia-300">Grain Sorghum (Jowar)</div>
+                            <div class="text-[11px] text-slate-400">Deep roots tap subsoil moisture reservoirs.</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-black text-amber-400">+50 XP</span>
+                        <div class="text-[10px] text-cyan-300">+1,100 L saved</div>
+                    </div>
+                </div>
+
+                <div onclick="selectCrop('Moong / Cowpea', '🫘', 'Nitrogen-Fixing Legume', 65, 80, 800)"
+                    class="p-4 rounded-xl bg-[#140e26] border border-purple-500/30 hover:border-fuchsia-400 hover:bg-fuchsia-950/40 cursor-pointer transition-all flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">🫘</div>
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-fuchsia-300">Cowpea / Chickpea</div>
+                            <div class="text-[11px] text-slate-400">Fixes 70 kg/ha of natural soil nitrogen.</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-black text-amber-400">+80 XP</span>
+                        <div class="text-[10px] text-emerald-300">+18% Soil Health</div>
+                    </div>
+                </div>
+
+                <div onclick="selectCrop('Sunn Hemp & Clover', '🌿', 'Cover Crop Armor', 70, 75, 950)"
+                    class="p-4 rounded-xl bg-[#140e26] border border-purple-500/30 hover:border-fuchsia-400 hover:bg-fuchsia-950/40 cursor-pointer transition-all flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">🌿</div>
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-fuchsia-300">Sunn Hemp & Clover</div>
+                            <div class="text-[11px] text-slate-400">Shields topsoil and drops soil temperature by 6°C.</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-black text-amber-400">+75 XP</span>
+                        <div class="text-[10px] text-cyan-300">+950 L saved</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 6. ORIEN THE ENDERMAN BOT COMPANION (CHAT) -->
+    <!-- ========================================== -->
+    <div id="orienContainer" class="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        
+        <!-- Orien Chat Box (Floating Spatial Window) -->
+        <div id="orienChatWindow" class="hidden mb-3 w-80 sm:w-96 spatial-glass rounded-3xl border border-fuchsia-500/40 shadow-2xl overflow-hidden flex flex-col transition-all">
+            
+            <!-- Orien Header -->
+            <div class="p-3.5 bg-[#120a22] border-b border-purple-500/30 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-black border border-purple-500/50 flex items-center justify-center p-1 relative shadow-inner">
+                        <div class="flex gap-1">
+                            <div class="w-2.5 h-1 bg-fuchsia-400 ender-eye"></div>
+                            <div class="w-2.5 h-1 bg-fuchsia-400 ender-eye"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-black text-white flex items-center gap-1.5">
+                            <span>ORIEN</span>
+                            <span class="text-[9px] uppercase px-1.5 py-0.2 rounded bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800">
+                                Enderman Bot
+                            </span>
+                        </div>
+                        <div class="text-[10px] text-purple-300/80">NASA Satellite Agro-Advisor</div>
+                    </div>
+                </div>
+                <button onclick="toggleOrienChat()" class="text-slate-400 hover:text-white text-xs p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Chat Messages Log -->
+            <div id="orienChatLog" class="p-3.5 space-y-3 h-64 overflow-y-auto text-xs">
+                <!-- Welcome Message -->
+                <div class="flex gap-2 items-start">
+                    <div class="w-6 h-6 rounded bg-black border border-fuchsia-500/40 flex items-center justify-center text-[10px] text-fuchsia-400 shrink-0 mt-0.5">
+                        ✦
+                    </div>
+                    <div class="bg-[#1a1230] p-3 rounded-2xl rounded-tl-none border border-purple-500/20 text-purple-100 leading-relaxed">
+                        <em>Vwoop!</em> Greetings, grower! I am <strong>Orien</strong>, your Enderman companion. 
+                        I peer through the space void into NASA's orbiting satellites. Ask me anything about your soil, heatwaves, or what to plant!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Suggestion Chips -->
+            <div class="px-3 py-2 bg-[#0d071a] border-t border-purple-500/20 flex gap-1.5 overflow-x-auto whitespace-nowrap">
+                <button onclick="sendQuickPrompt('Why is my field thirsty?')" class="text-[10px] px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800/60 hover:border-fuchsia-500 hover:text-white transition-all">
+                    💧 Why is my field thirsty?
+                </button>
+                <button onclick="sendQuickPrompt('What should I plant?')" class="text-[10px] px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800/60 hover:border-fuchsia-500 hover:text-white transition-all">
+                    🌾 What should I plant?
+                </button>
+                <button onclick="sendQuickPrompt('How hot is it?')" class="text-[10px] px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800/60 hover:border-fuchsia-500 hover:text-white transition-all">
+                    🔥 How hot is it?
+                </button>
+                <button onclick="sendQuickPrompt('How does NASA read my farm?')" class="text-[10px] px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800/60 hover:border-fuchsia-500 hover:text-white transition-all">
+                    🛰️ NASA Satellites?
+                </button>
+            </div>
+
+            <!-- Input Bar -->
+            <div class="p-2.5 bg-[#120a22] border-t border-purple-500/30 flex items-center gap-2">
+                <input type="text" id="orienInput" placeholder="Ask Orien anything..." 
+                    onkeydown="if(event.key === 'Enter') sendOrienMessage()"
+                    class="flex-1 bg-[#1c1334] border border-purple-500/40 rounded-xl px-3 py-2 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-fuchsia-400">
+                <button onclick="sendOrienMessage()" id="orienSendBtn"
+                    class="w-8 h-8 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white flex items-center justify-center text-xs hover:from-fuchsia-500 hover:to-purple-500 shadow-md">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Orien Floating Avatar Button -->
+        <button onclick="toggleOrienChat()" id="orienTriggerBtn"
+            class="float-idle flex items-center gap-3 p-2.5 pr-4 rounded-full spatial-glass border border-fuchsia-500/50 hover:border-fuchsia-400 shadow-2xl hover:scale-105 transition-all group">
+            
+            <!-- Mini Enderman Head -->
+            <div class="w-10 h-10 rounded-full bg-[#0a0614] border border-fuchsia-400/60 flex items-center justify-center p-2 relative shadow-lg shadow-fuchsia-950">
+                <div class="flex gap-1.5">
+                    <div class="w-2.5 h-1 bg-fuchsia-400 ender-eye"></div>
+                    <div class="w-2.5 h-1 bg-fuchsia-400 ender-eye"></div>
+                </div>
+            </div>
+
+            <div class="text-left">
+                <div class="text-xs font-black text-white flex items-center gap-1">
+                    <span>Orien</span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                </div>
+                <div class="text-[10px] text-fuchsia-300">Tap to Ask Orien</div>
+            </div>
+        </button>
+
+    </div>
+
+    <!-- SCRIPT LOGIC -->
+    <script>
+        // Mouse Eye Tracking
+        const eyeLeft = document.getElementById('eyeLeft');
+        const eyeRight = document.getElementById('eyeRight');
+
+        window.addEventListener('mousemove', (e) => {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const moveX = Math.max(-5, Math.min(5, (mouseX - centerX) / 50));
+            const moveY = Math.max(-2, Math.min(2, (mouseY - centerY) / 60));
+
+            if (eyeLeft && eyeRight) {
+                eyeLeft.style.transform = `translate(${moveX}px, ${moveY}px)`;
+                eyeRight.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            }
+        });
+
+        // Ender Particles Canvas
+        const canvas = document.getElementById('enderCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class EnderParticle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 3 + 1;
+                this.speedY = -(Math.random() * 0.8 + 0.2);
+                this.speedX = (Math.random() - 0.5) * 0.4;
+                this.alpha = Math.random() * 0.6 + 0.2;
+                this.color = Math.random() > 0.5 ? '#d946ef' : '#a855f7';
+            }
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX;
+                if (this.y < 0) this.reset();
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        for (let i = 0; i < 45; i++) particles.push(new EnderParticle());
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // Presets & Login
+        let currentLat = 30.9010;
+        let currentLon = 75.8573;
+        let currentFarmerName = "Farmer Rocky";
+        let latestTelemetryContext = {};
+
+        function onBiomeSelect(biomeId) {
+            const select = document.getElementById('biomeSelect');
+            const selectedOpt = select.options[select.selectedIndex];
+            currentLat = parseFloat(selectedOpt.getAttribute('data-lat'));
+            currentLon = parseFloat(selectedOpt.getAttribute('data-lon'));
+            document.getElementById('loginLat').innerText = currentLat.toFixed(4);
+            document.getElementById('loginLon').innerText = currentLon.toFixed(4);
+            playSound('click');
+        }
+
+        function teleportToFarm() {
+            currentFarmerName = document.getElementById('farmerName').value.trim() || "Farmer";
+            playSound('teleport');
+
+            const portal = document.getElementById('loginPortal');
+            portal.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            portal.style.opacity = '0';
+            portal.style.transform = 'scale(1.15)';
+
+            setTimeout(() => {
+                portal.classList.add('hidden');
+                document.getElementById('farmHUD').classList.remove('hidden');
+                document.getElementById('playerBadge').innerText = `${currentFarmerName} • Adaptive Agro-Guardian`;
+                initSpatialCharts();
+                scanWithNASA();
+            }, 550);
+        }
+
+        function returnToGate() {
+            playSound('click');
+            document.getElementById('farmHUD').classList.add('hidden');
+            const portal = document.getElementById('loginPortal');
+            portal.classList.remove('hidden');
+            portal.style.opacity = '1';
+            portal.style.transform = 'scale(1)';
+        }
+
+        function toggleAudio() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('audioBtn');
+            btn.innerHTML = soundEnabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark text-slate-500"></i>';
+            if (soundEnabled) playSound('click');
+        }
+
+        // Gamified Score & Plot Shifting
+        let totalXP = 120;
+        let totalWaterSaved = 2400;
+        let totalSoilVitality = 84;
+        let activeShiftPlotId = null;
+
+        function openShiftCropModal(plotId) {
+            playSound('click');
+            activeShiftPlotId = plotId;
+            document.getElementById('modalPlotTitle').innerText = `Select Crop for Plot 0${plotId}`;
+            document.getElementById('shiftCropModal').classList.remove('hidden');
+        }
+
+        function closeShiftCropModal() {
+            playSound('click');
+            document.getElementById('shiftCropModal').classList.add('hidden');
+        }
+
+        function selectCrop(cropName, icon, type, moisturePct, xpBonus, waterBonus) {
+            playSound('shift');
+            totalXP += xpBonus;
+            totalWaterSaved += waterBonus;
+            totalSoilVitality = Math.min(100, totalSoilVitality + 5);
+
+            document.getElementById('xpCounter').innerText = `${totalXP} XP`;
+            document.getElementById('waterCounter').innerText = `${totalWaterSaved.toLocaleString()} L`;
+            document.getElementById('soilVitality').innerText = `${totalSoilVitality}%`;
+
+            if (activeShiftPlotId) {
+                document.getElementById(`plotCropName-${activeShiftPlotId}`).innerText = cropName;
+                document.getElementById(`plotIconBox-${activeShiftPlotId}`).innerText = icon;
+                document.getElementById(`plotCropType-${activeShiftPlotId}`).innerText = type;
+                document.getElementById(`plotMoistureVal-${activeShiftPlotId}`).innerText = `${moisturePct}% (Shift Protected)`;
+                document.getElementById(`plotMoistureBar-${activeShiftPlotId}`).style.width = `${moisturePct}%`;
+                
+                const statusSpan = document.getElementById(`plotStatus-${activeShiftPlotId}`);
+                statusSpan.className = "text-xs font-bold text-emerald-400 flex items-center gap-1";
+                statusSpan.innerHTML = `<i class="fa-solid fa-circle-check"></i> Shifted & Resilient!`;
+            }
+
+            closeShiftCropModal();
+        }
+
+        // Deep NASA API Query Engine
+        let chart1Instance = null;
+        let chart2Instance = null;
+
+        async function scanWithNASA() {
+            playSound('click');
+            const scanBtn = document.getElementById('scanBtn');
+            const laser = document.getElementById('scanLaser');
+            
+            laser.classList.remove('hidden');
+            scanBtn.disabled = true;
+            scanBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> NASA Deep Orbital Scan...`;
+
+            try {
+                const response = await fetch('/api/fetch-nasa', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: currentLat,
+                        lon: currentLon,
+                        start: '2024-05-01',
+                        end: '2024-05-20'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    playSound('shift');
+                    latestTelemetryContext = data.summary;
+
+                    // Update Extended HUD
+                    document.getElementById('hudTemp').innerText = `${data.summary.avg_temp} °C`;
+                    document.getElementById('hudPeakTemp').innerText = `Peak: ${data.summary.peak_max_temp} °C`;
+                    document.getElementById('hudRain').innerText = `${data.summary.total_precip} mm`;
+                    document.getElementById('hudSoilRoot').innerText = `${data.summary.avg_root_soil} %`;
+                    document.getElementById('hudSoilTop').innerText = `Top: ${data.summary.avg_top_soil} %`;
+                    document.getElementById('hudVPD').innerText = `${data.summary.avg_vpd} kPa`;
+                    document.getElementById('hudSolar').innerText = `${data.summary.avg_solar} MJ/m²`;
+                    document.getElementById('hudWindDew').innerText = `${data.summary.avg_wind} m/s`;
+                    document.getElementById('hudDew').innerText = `GDD: ${data.summary.total_gdd}`;
+
+                    // Update Charts
+                    updateCharts(data.records);
+
+                    // Update Raw Table
+                    renderTelemetryTable(data.records);
+
+                    // CSV Link
+                    document.getElementById('downloadCsvLink').href = `/api/download-csv/${data.csv_file}`;
+                }
+            } catch (err) {
+                console.error("NASA API Error:", err);
+            } finally {
+                setTimeout(() => {
+                    laser.classList.add('hidden');
+                    scanBtn.disabled = false;
+                    scanBtn.innerHTML = `<i class="fa-solid fa-satellite-dish"></i> <span>Scan Field with NASA Satellites</span>`;
+                }, 1200);
+            }
+        }
+
+        function renderTelemetryTable(records) {
+            const tbody = document.getElementById('telemetryTableBody');
+            tbody.innerHTML = '';
+            records.forEach(r => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-purple-950/30 transition-colors">
+                        <td class="px-3 py-2 text-white font-medium">${r.date}</td>
+                        <td class="px-3 py-2">${r.temp}°C</td>
+                        <td class="px-3 py-2 text-amber-400 font-bold">${r.temp_max}°C</td>
+                        <td class="px-3 py-2 text-blue-300">${r.precip} mm</td>
+                        <td class="px-3 py-2 text-emerald-400">${r.soil_root_pct}%</td>
+                        <td class="px-3 py-2 text-cyan-300">${r.soil_top_pct}%</td>
+                        <td class="px-3 py-2 text-yellow-300">${r.solar}</td>
+                        <td class="px-3 py-2 text-fuchsia-300 font-bold">${r.vpd_kpa}</td>
+                        <td class="px-3 py-2 text-slate-400">${r.gdd}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function initSpatialCharts() {
+            const ctx1 = document.getElementById('spatialTempChart').getContext('2d');
+            chart1Instance = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'],
+                    datasets: [
+                        {
+                            label: 'Max Temp (°C)',
+                            data: [35, 38, 41, 37, 36],
+                            borderColor: '#d946ef',
+                            backgroundColor: 'rgba(217, 70, 239, 0.15)',
+                            borderWidth: 2,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Mean Temp (°C)',
+                            data: [28, 30, 32, 29, 28],
+                            borderColor: '#38bdf8',
+                            borderWidth: 1.5,
+                            borderDash: [3, 3],
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+                    }
+                }
+            });
+
+            const ctx2 = document.getElementById('spatialPrecipChart').getContext('2d');
+            chart2Instance = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'],
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Rainfall (mm)',
+                            data: [0, 4, 12, 0, 1],
+                            backgroundColor: 'rgba(34, 211, 238, 0.7)',
+                            borderColor: '#22d3ee',
+                            borderRadius: 4
+                        },
+                        {
+                            type: 'line',
+                            label: 'Root Soil Wetness (%)',
+                            data: [28, 32, 45, 38, 30],
+                            borderColor: '#10b981',
+                            borderWidth: 2.5,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+                    }
+                }
+            });
+        }
+
+        function updateCharts(records) {
+            if (!chart1Instance || !chart2Instance || !records) return;
+            const labels = records.map(r => r.date.substring(5));
+            const maxTemps = records.map(r => r.temp_max);
+            const meanTemps = records.map(r => r.temp);
+            const precips = records.map(r => r.precip);
+            const soils = records.map(r => r.soil_root_pct);
+
+            chart1Instance.data.labels = labels;
+            chart1Instance.data.datasets[0].data = maxTemps;
+            chart1Instance.data.datasets[1].data = meanTemps;
+            chart1Instance.update();
+
+            chart2Instance.data.labels = labels;
+            chart2Instance.data.datasets[0].data = precips;
+            chart2Instance.data.datasets[1].data = soils;
+            chart2Instance.update();
+        }
+
+        // ====================================================
+        // ORIEN THE ENDERMAN BOT INTERACTION
+        // ====================================================
+        function toggleOrienChat() {
+            playSound('orien');
+            const chatWin = document.getElementById('orienChatWindow');
+            chatWin.classList.toggle('hidden');
+            if (!chatWin.classList.contains('hidden')) {
+                document.getElementById('orienInput').focus();
+            }
+        }
+
+        function sendQuickPrompt(promptText) {
+            document.getElementById('orienInput').value = promptText;
+            sendOrienMessage();
+        }
+
+        async function sendOrienMessage() {
+            const input = document.getElementById('orienInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            playSound('click');
+            input.value = '';
+
+            const chatLog = document.getElementById('orienChatLog');
+
+            // Append User message
+            chatLog.innerHTML += `
+                <div class="flex gap-2 items-start justify-end">
+                    <div class="bg-gradient-to-r from-fuchsia-600 to-purple-600 p-3 rounded-2xl rounded-tr-none text-white leading-relaxed shadow">
+                        ${escapeHtml(msg)}
+                    </div>
+                </div>
+            `;
+            chatLog.scrollTop = chatLog.scrollHeight;
+
+            // Typing indicator
+            const typingId = 'typing-' + Date.now();
+            chatLog.innerHTML += `
+                <div id="${typingId}" class="flex gap-2 items-start">
+                    <div class="w-6 h-6 rounded bg-black border border-fuchsia-500/40 flex items-center justify-center text-[10px] text-fuchsia-400 shrink-0">
+                        ✦
+                    </div>
+                    <div class="bg-[#1a1230] p-2.5 rounded-2xl rounded-tl-none border border-purple-500/20 text-purple-300 italic text-[11px]">
+                        Orien is peering into the satellite void...
+                    </div>
+                </div>
+            `;
+            chatLog.scrollTop = chatLog.scrollHeight;
+
+            try {
+                const res = await fetch('/api/ask-orien', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        context: latestTelemetryContext
+                    })
+                });
+
+                const data = await res.json();
+                document.getElementById(typingId)?.remove();
+
+                if (data.success) {
+                    playSound('orien');
+                    chatLog.innerHTML += `
+                        <div class="flex gap-2 items-start">
+                            <div class="w-6 h-6 rounded bg-black border border-fuchsia-500/40 flex items-center justify-center text-[10px] text-fuchsia-400 shrink-0 mt-0.5">
+                                ✦
+                            </div>
+                            <div class="bg-[#1a1230] p-3 rounded-2xl rounded-tl-none border border-purple-500/20 text-purple-100 leading-relaxed shadow">
+                                ${formatOrienReply(data.reply)}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                document.getElementById(typingId)?.remove();
+                chatLog.innerHTML += `
+                    <div class="text-[11px] text-rose-400 p-2 text-center">
+                        *Vwoop! Telemetry interference.* Please try again.
+                    </div>
+                `;
+            }
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        function formatOrienReply(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em class="text-fuchsia-300">$1</em>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+    </script>
+</body>
+</html>
