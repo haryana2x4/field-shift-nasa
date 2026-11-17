@@ -1,3 +1,6 @@
+﻿> 🚀 **Full Production Platform -> [Kshetra (क्षेत्र) — haryana2x4/terrawise-ai](https://github.com/haryana2x4/terrawise-ai)**
+> 🏆 **NASA Space Apps Challenge 2026 — Team Infinity • Provisional Rank #8 (73/100, 20/20 Validity)**
+
 # Field Shift: Adapting Farms with NASA Data
 
 Spatial Virtual Farm Simulation & Decision-Support System leveraging open NASA Earth observations (NASA POWER, MERRA-2, GEOS) to empower farmers and agronomists with climate-resilient crop rotation and groundwater conservation.
