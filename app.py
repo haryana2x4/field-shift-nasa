@@ -14,12 +14,13 @@ import os
 import csv
 import json
 import math
+import secrets
 from datetime import datetime, timedelta
 import requests
 from flask import Flask, render_template, request, jsonify, send_file
 
 app = Flask(__name__)
-app.secret_key = "nasa_orien_enderman_field_shift_2026"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
