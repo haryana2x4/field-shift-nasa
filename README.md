@@ -13,13 +13,13 @@ Spatial Virtual Farm Simulation & Decision-Support System leveraging open NASA E
 ## Quick Start
 
 1. Install requirements:
-   \\\ash
+   ```ash
    pip install -r requirements.txt
-   \\\
+   ```
 
 2. Run the application:
-   \\\ash
+   ```ash
    python app.py
-   \\\
+   ```
 
-3. Open \http://127.0.0.1:5000\ in your web browser.
+3. Open `http://127.0.0.1:5000` in your web browser.
